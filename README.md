@@ -39,17 +39,35 @@ python main.py
 
 This will analyze all PDF files with all three models and save results to `outputs/`.
 
-### Advanced Usage
+### Running Specific Models
+
+You can run individual models or all models together:
 
 ```bash
-# Analyze with specific model only
+# Run all models (default)
+python main.py
+
+# Run only social analysis
 python main.py --model social
 
+# Run only environmental analysis
+python main.py --model environmental
+
+# Run only financial sentiment analysis
+python main.py --model financial
+```
+
+### Advanced Configuration
+
+```bash
 # Use custom directories
 python main.py --data-dir /path/to/pdfs --output-dir /path/to/results
 
 # Adjust classification thresholds
 python main.py --social-threshold 0.8 --env-threshold 0.75 --fin-threshold 0.65
+
+# Combine model selection with custom settings
+python main.py --model social --social-threshold 0.9 --data-dir ./reports
 ```
 
 ### Command Line Options
@@ -119,6 +137,61 @@ bert-document-scan/
 1. **ESGBERT/SocRoBERTa-social**: Identifies social responsibility content
 2. **ESGBERT/EnvRoBERTa-environmental**: Identifies environmental content  
 3. **ProsusAI/finbert**: Analyzes financial sentiment (positive/negative/neutral)
+
+## Adding New Models
+
+To add a new BERT model for analysis, follow these steps:
+
+### 1. Create a New Analyzer Class
+
+Create a new analyzer in `src/models/` that inherits from `BaseAnalyzer`:
+
+```python
+# src/models/your_analyzer.py
+from .base_analyzer import BaseAnalyzer
+
+class YourAnalyzer(BaseAnalyzer):
+    def __init__(self):
+        model_name = "huggingface/your-model-name"
+        super().__init__(model_name, "your_category")
+
+    def get_target_label(self):
+        """Return the label you want to classify (e.g., 'LABEL_1', 'positive')"""
+        return "your_target_label"
+```
+
+### 2. Update Main Script
+
+Add your model to `main.py`:
+
+```python
+# In the imports section
+from src.models.your_analyzer import YourAnalyzer
+
+# In the model selection logic
+elif args.model == 'your_model':
+    analyzer = YourAnalyzer()
+    # Add threshold argument if needed
+```
+
+### 3. Add Command Line Arguments
+
+Update the argument parser in `main.py`:
+
+```python
+parser.add_argument('--model', choices=['social', 'environmental', 'financial', 'your_model', 'all'])
+parser.add_argument('--your-threshold', type=float, default=0.7)
+```
+
+### 4. Alternative: Financial Model Pattern
+
+If your model uses the transformers pipeline (like FinBERT), create a standalone analyzer similar to `financial_analyzer.py` instead of inheriting from `BaseAnalyzer`.
+
+### Model Requirements
+
+- Model should be available on Hugging Face Hub
+- For ESG-style models: Use BaseAnalyzer and return probability scores
+- For sentiment models: Use transformers pipeline and return labels with scores
 
 ## Requirements
 

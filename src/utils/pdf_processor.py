@@ -2,7 +2,7 @@
 PDF processing utilities for extracting text and sentences from annual reports.
 
 This module provides functions for:
-- Downloading PDFs from URLs or handling local files
+- Handling local PDF files
 - Extracting text from PDFs with page number tracking
 - Splitting text into clean sentences for BERT analysis
 - Generating standardized report names from file paths
@@ -10,7 +10,6 @@ This module provides functions for:
 
 import os
 import re
-import requests
 from pathlib import Path
 from typing import List, Dict
 import fitz  # PyMuPDF - for PDF text extraction
@@ -18,6 +17,75 @@ import fitz  # PyMuPDF - for PDF text extraction
 
 # Professional sentence segmentation using spaCy-style approach
 import re
+
+
+def clean_extracted_text(text: str) -> str:
+    """
+    Clean up common encoding issues in PDF text extraction.
+    
+    Args:
+        text: Raw text extracted from PDF
+        
+    Returns:
+        Cleaned text with proper character replacements
+    """
+    if not text:
+        return text
+    
+    # Find and print ALL problematic characters for debugging
+    import re
+    problematic_chars = re.findall(r'[^\x00-\x7F]', text)
+    if problematic_chars:
+        unique_chars = list(set(problematic_chars))[:10]  # First 10 unique
+        print(f"Found non-ASCII characters: {unique_chars}")
+        for char in unique_chars:
+            print(f"  '{char}' -> bytes: {char.encode('utf-8')}")
+    
+    # Try different approaches
+    cleaned_text = text
+    
+    # Approach 1: Direct string replacement
+    simple_replacements = {
+        'Äô': "'", 'Äì': "-", '≈ç': 'fi', 'Â': ''
+    }
+    
+    for old_char, new_char in simple_replacements.items():
+        count = cleaned_text.count(old_char)
+        if count > 0:
+            cleaned_text = cleaned_text.replace(old_char, new_char)
+            print(f"Direct replacement: '{old_char}' -> '{new_char}' ({count} times)")
+    
+    # Approach 2: Byte-level replacement (for encoding issues)
+    try:
+        # Convert to bytes and back to handle encoding issues
+        byte_data = cleaned_text.encode('utf-8', errors='ignore')
+        
+        # Replace problematic byte sequences
+        byte_replacements = {
+            b'\xc3\x84\xc3\xb4': b"'",    # Äô as bytes
+            b'\xc3\x84\xc3\xac': b'-',    # Äì as bytes
+            b'\xe2\x89\x88\xc3\xa7': b'fi'  # ≈ç as bytes
+        }
+        
+        for old_bytes, new_bytes in byte_replacements.items():
+            if old_bytes in byte_data:
+                byte_data = byte_data.replace(old_bytes, new_bytes)
+                print(f"Byte replacement: {old_bytes} -> {new_bytes}")
+        
+        cleaned_text = byte_data.decode('utf-8', errors='ignore')
+        
+    except Exception as e:
+        print(f"Byte replacement failed: {e}")
+    
+    # Approach 3: Character-by-character replacement
+    char_map = {ord('Ä'): '', ord('ô'): "'", ord('ì'): '-', ord('≈'): '', ord('ç'): 'fi'}
+    try:
+        cleaned_text = cleaned_text.translate(char_map)
+        print("Applied character translation")
+    except Exception as e:
+        print(f"Character translation failed: {e}")
+    
+    return cleaned_text
 
 
 def text_to_sentences(text: str) -> str:
@@ -77,40 +145,18 @@ def text_to_sentences(text: str) -> str:
     return '\n'.join(valid_sentences)
 
 
-def fetch_pdf(pdf_source: str, temp_dir: str = "/tmp") -> str:
+def fetch_pdf(pdf_source: str) -> str:
     """
-    Download PDF from URL or return local path for processing.
+    Return local file path for processing.
     
-    This function handles both local files and remote URLs, downloading
-    remote PDFs to a temporary location for processing.
+    This function simply returns the provided local file path.
     
     Args:
-        pdf_source: Local file path or HTTP/HTTPS URL to PDF
-        temp_dir: Directory where downloaded files will be stored
+        pdf_source: Local file path to PDF
         
     Returns:
-        Local file path to the PDF (original path if local, downloaded path if URL)
-        
-    Raises:
-        requests.HTTPError: If URL download fails
-        requests.Timeout: If download times out (120s timeout)
+        Local file path to the PDF
     """
-    # Check if source is a URL (starts with http/https)
-    if pdf_source.lower().startswith("http"):
-        # Extract filename from URL, removing query parameters
-        filename = os.path.basename(pdf_source.split("?")[0]) or "report.pdf"
-        output_path = os.path.join(temp_dir, filename)
-        
-        # Download with timeout and error handling
-        response = requests.get(pdf_source, timeout=120)
-        response.raise_for_status()  # Raise exception for HTTP error codes
-        
-        # Save downloaded content to file
-        with open(output_path, "wb") as f:
-            f.write(response.content)
-        return output_path
-    
-    # Source is already a local file path
     return pdf_source
 
 
@@ -144,6 +190,9 @@ def extract_sentences_with_pages(pdf_path: str, min_len: int = 30, max_len: int 
     for page_num in range(len(doc)):
         # Extract raw text from the page
         text = doc[page_num].get_text("text")
+        
+        # Clean up encoding issues first
+        text = clean_extracted_text(text)
         
         # Clean up whitespace and formatting issues common in PDF extraction
         text = re.sub(r"[ \t]+", " ", text)        # Normalize multiple spaces/tabs to single space
