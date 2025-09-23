@@ -144,20 +144,37 @@ To add a new BERT model for analysis, follow these steps:
 
 ### 1. Create a New Analyzer Class
 
-Create a new analyzer in `src/models/` that inherits from `BaseAnalyzer`:
+Create a new analyzer in `src/models/` using the pipeline approach:
 
 ```python
 # src/models/your_analyzer.py
-from .base_analyzer import BaseAnalyzer
+import os
+import pandas as pd
+from typing import List, Dict, Any
+from tqdm import tqdm
+from transformers import pipeline
 
-class YourAnalyzer(BaseAnalyzer):
-    def __init__(self):
-        model_name = "huggingface/your-model-name"
-        super().__init__(model_name, "your_category")
+class YourAnalyzer:
+    def __init__(self, threshold: float = 0.7, batch_size: int = 32):
+        self.threshold = threshold
+        self.batch_size = batch_size
 
-    def get_target_label(self):
-        """Return the label you want to classify (e.g., 'LABEL_1', 'positive')"""
-        return "your_target_label"
+        # Initialize pipeline
+        self.classifier = pipeline(
+            task="text-classification",
+            model="huggingface/your-model-name",
+            tokenizer="huggingface/your-model-name",
+            return_all_scores=True,
+            truncation=True
+        )
+
+    def score_sentences(self, sentences: List[str]) -> List[float]:
+        # Implementation similar to social/environmental analyzers
+        pass
+
+    def analyze_report(self, sentences_data: List[Dict], report_name: str, output_dir: str) -> Dict[str, Any]:
+        # Implementation similar to social/environmental analyzers
+        pass
 ```
 
 ### 2. Update Main Script
@@ -183,15 +200,12 @@ parser.add_argument('--model', choices=['social', 'environmental', 'financial', 
 parser.add_argument('--your-threshold', type=float, default=0.7)
 ```
 
-### 4. Alternative: Financial Model Pattern
-
-If your model uses the transformers pipeline (like FinBERT), create a standalone analyzer similar to `financial_analyzer.py` instead of inheriting from `BaseAnalyzer`.
-
 ### Model Requirements
 
 - Model should be available on Hugging Face Hub
-- For ESG-style models: Use BaseAnalyzer and return probability scores
-- For sentiment models: Use transformers pipeline and return labels with scores
+- All analyzers now use the transformers pipeline approach for consistency
+- Models should support text classification task
+- Handle label extraction by checking for appropriate label names in the pipeline output
 
 ## Requirements
 
