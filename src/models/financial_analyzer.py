@@ -142,7 +142,47 @@ class FinancialAnalyzer:
                 })
         
         return results
-    
+
+    def _preview_results(self, hits_df: pd.DataFrame, report_name: str, preview_count: int = 70):
+        """
+        Preview high-confidence financial sentiment results before saving to CSV.
+
+        Args:
+            hits_df: DataFrame containing high-positive sentiment matches, sorted by score
+            report_name: Name of the report being processed
+            preview_count: Number of results to preview (default: 70)
+        """
+        if hits_df.empty:
+            print(f"\n📋 Preview for {report_name}: No positive financial sentiment above threshold")
+            return
+
+        print(f"\n📋 Preview: Top {min(preview_count, len(hits_df))} positive financial sentiment results for {report_name}")
+        print("=" * 80)
+
+        # Show top results up to preview_count
+        preview_df = hits_df.head(preview_count)
+
+        for idx, (_, row) in enumerate(preview_df.iterrows(), 1):
+            positive_score = row['positive']
+            page = row['page']
+            sentence = row['sentence']
+
+            # Truncate very long sentences for display
+            display_sentence = sentence[:120] + "..." if len(sentence) > 120 else sentence
+
+            print(f"{idx:2d}. [Page {page:2d}] Positive: {positive_score:.3f} | {display_sentence}")
+
+            # Add a separator every 10 items for readability
+            if idx % 10 == 0 and idx < len(preview_df):
+                print("-" * 80)
+
+        # Show summary if there are more results
+        total_hits = len(hits_df)
+        if total_hits > preview_count:
+            print(f"\n... and {total_hits - preview_count} more results (showing top {preview_count})")
+
+        print("=" * 80)
+
     def analyze_report(self, sentences_data: List[Dict], report_name: str, output_dir: str) -> Dict[str, Any]:
         """
         Analyze sentences from a report for financial sentiment and save results.
@@ -197,19 +237,22 @@ class FinancialAnalyzer:
         # Ensure output directory exists
         os.makedirs(output_dir, exist_ok=True)
         
+        # Prepare filtered results: top N most positive sentences
+        # Sort by positive score first, then by overall confidence score
+        top_positive = (df[df["is_positive"]]
+                       .sort_values(["positive", "score"], ascending=False)
+                       .head(self.top_n))  # Limit to top N results
+
+        # Preview results before saving to CSV
+        self._preview_results(top_positive, report_name)
+
         # Save complete results: all sentences with comprehensive sentiment data
         # Using consistent naming convention: financial_results_all_{report}.csv
         all_csv = os.path.join(output_dir, f"financial_results_all_{report_name}.csv")
         df[["page", "label", "score", "positive", "neutral", "negative", "sentence"]].to_csv(
             all_csv, index=False
         )
-        
-        # Save filtered results: top N most positive sentences
-        # Sort by positive score first, then by overall confidence score
-        top_positive = (df[df["is_positive"]]
-                       .sort_values(["positive", "score"], ascending=False)
-                       .head(self.top_n))  # Limit to top N results
-        
+
         # Using consistent naming convention: financial_results_hits_{report}.csv
         hits_csv = os.path.join(output_dir, f"financial_results_hits_{report_name}.csv")
         top_positive[["page", "positive", "sentence"]].to_csv(hits_csv, index=False)

@@ -68,12 +68,12 @@ def process_reports_with_model(pdf_files, analyzer, model_name, output_dir):
         try:
             # Step 1: Extract text content from PDF
             sentences_data = extract_sentences_with_pages(pdf_path)
-            
+
             # Skip files where no meaningful text was extracted
             if not sentences_data:
                 print(f"No sentences extracted from {pdf_path}. Skipping.")
                 continue
-            
+
             # Step 2: Run BERT analysis and save results
             summary = analyzer.analyze_report(sentences_data, report_name, output_dir)
             summaries.append(summary)

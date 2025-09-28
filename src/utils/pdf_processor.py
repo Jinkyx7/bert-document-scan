@@ -15,76 +15,40 @@ from typing import List, Dict
 import fitz  # PyMuPDF - for PDF text extraction
 # from blingfire import text_to_sentences  # Microsoft's fast sentence segmentation
 
-# Professional sentence segmentation using spaCy-style approach
-import re
-
-
 def clean_extracted_text(text: str) -> str:
     """
     Clean up common encoding issues in PDF text extraction.
-    
+
     Args:
         text: Raw text extracted from PDF
-        
+
     Returns:
         Cleaned text with proper character replacements
     """
     if not text:
         return text
-    
-    # Find and print ALL problematic characters for debugging
-    import re
-    problematic_chars = re.findall(r'[^\x00-\x7F]', text)
-    if problematic_chars:
-        unique_chars = list(set(problematic_chars))[:10]  # First 10 unique
-        print(f"Found non-ASCII characters: {unique_chars}")
-        for char in unique_chars:
-            print(f"  '{char}' -> bytes: {char.encode('utf-8')}")
-    
+
+
     # Try different approaches
     cleaned_text = text
-    
+
     # Approach 1: Direct string replacement
     simple_replacements = {
-        'Äô': "'", 'Äì': "-", '≈ç': 'fi', 'Â': ''
+        'We‚Äôre': "We're",
+        'We‚Äôve': "We've",
+        '‚Äôs': "'s",
+        'Äô': "'", 'Äì': "-", '≈ç': 'fi', 'Â': '',
+        '‚Äô': "'",  # Common encoding issue for apostrophes
+        '‚Äì': "-",  # Common encoding issue for dashes
+        '‚Äù': "'",  # Another apostrophe variant
+        '‚Äú': "'",  # Another apostrophe variant
     }
-    
+
     for old_char, new_char in simple_replacements.items():
         count = cleaned_text.count(old_char)
         if count > 0:
             cleaned_text = cleaned_text.replace(old_char, new_char)
-            print(f"Direct replacement: '{old_char}' -> '{new_char}' ({count} times)")
-    
-    # Approach 2: Byte-level replacement (for encoding issues)
-    try:
-        # Convert to bytes and back to handle encoding issues
-        byte_data = cleaned_text.encode('utf-8', errors='ignore')
-        
-        # Replace problematic byte sequences
-        byte_replacements = {
-            b'\xc3\x84\xc3\xb4': b"'",    # Äô as bytes
-            b'\xc3\x84\xc3\xac': b'-',    # Äì as bytes
-            b'\xe2\x89\x88\xc3\xa7': b'fi'  # ≈ç as bytes
-        }
-        
-        for old_bytes, new_bytes in byte_replacements.items():
-            if old_bytes in byte_data:
-                byte_data = byte_data.replace(old_bytes, new_bytes)
-                print(f"Byte replacement: {old_bytes} -> {new_bytes}")
-        
-        cleaned_text = byte_data.decode('utf-8', errors='ignore')
-        
-    except Exception as e:
-        print(f"Byte replacement failed: {e}")
-    
-    # Approach 3: Character-by-character replacement
-    char_map = {ord('Ä'): '', ord('ô'): "'", ord('ì'): '-', ord('≈'): '', ord('ç'): 'fi'}
-    try:
-        cleaned_text = cleaned_text.translate(char_map)
-        print("Applied character translation")
-    except Exception as e:
-        print(f"Character translation failed: {e}")
-    
+
     return cleaned_text
 
 
@@ -202,8 +166,12 @@ def extract_sentences_with_pages(pdf_path: str, min_len: int = 30, max_len: int 
         # Use BlingFire for robust sentence segmentation
         # BlingFire handles abbreviations, decimal numbers, etc. better than regex
         for sentence in text_to_sentences(text).split("\n"):
-            sentence = sentence.strip()
-            
+            # Perform an additional cleaning pass on each sentence after
+            # segmentation to remove any residual encoding artefacts.  This
+            # ensures that the financial and ESG analyzers receive clean
+            # sentences even if the segmentation introduces new boundaries.
+            sentence = clean_extracted_text(sentence.strip())
+
             # Filter sentences by length to exclude:
             # - Very short text (likely headers, page numbers, etc.)
             # - Very long text (likely tables, lists that aren't proper sentences)

@@ -6,17 +6,13 @@ identifying sentences that discuss climate change, sustainability initiatives,
 environmental compliance, and other environmental ESG factors.
 """
 
-import os
-import pandas as pd
-from typing import List, Dict, Any
-from tqdm import tqdm
-from transformers import pipeline
+from .base_analyzer import BaseAnalyzer
 
 
-class EnvironmentalAnalyzer:
+class EnvironmentalAnalyzer(BaseAnalyzer):
     """
     Analyzer for identifying environmental sustainability content in annual reports.
-
+    
     Uses the ESGBERT/EnvRoBERTa-environmental model, which is specifically trained
     to classify text as related to environmental governance factors including:
     - Climate change mitigation and adaptation
@@ -27,11 +23,11 @@ class EnvironmentalAnalyzer:
     - Biodiversity and ecosystem protection
     - Environmental compliance and regulations
     """
-
+    
     def __init__(self, threshold: float = 0.7, batch_size: int = 32):
         """
         Initialize the environmental sustainability analyzer.
-
+        
         Args:
             threshold: Classification threshold for environmental content (0.0-1.0)
                       Higher values = more conservative, fewer false positives
@@ -39,106 +35,42 @@ class EnvironmentalAnalyzer:
             batch_size: Number of sentences to process simultaneously
                        Larger batches = faster processing but more memory usage
         """
-        self.threshold = threshold
-        self.batch_size = batch_size
-
-        # Initialize ESGBERT/EnvRoBERTa-environmental pipeline
-        print("Loading ESGBERT/EnvRoBERTa-environmental model...")
-        self.classifier = pipeline(
-            task="text-classification",
-            model="ESGBERT/EnvRoBERTa-environmental",
-            tokenizer="ESGBERT/EnvRoBERTa-environmental",
-            return_all_scores=True,  # Return scores for all classes
-            truncation=True          # Handle long sentences automatically
+        # Initialize with the specialized environmental ESG model
+        super().__init__(
+            model_name="ESGBERT/EnvRoBERTa-environmental",
+            threshold=threshold,
+            batch_size=batch_size
         )
-
-    def score_sentences(self, sentences: List[str]) -> List[float]:
+    
+    def _find_target_class_index(self) -> int:
         """
-        Score a list of sentences for environmental content using ESGBERT.
-
-        Args:
-            sentences: List of sentences to analyze
-
+        Find the index of the 'environmental' class in the model's output.
+        
+        The ESGBERT/EnvRoBERTa-environmental model may use different label names
+        depending on its configuration. This method searches for common
+        variations of "environmental" labels.
+        
         Returns:
-            List of probability scores (0.0-1.0) for environmental content,
-            one score per input sentence in the same order
+            Integer index of the environmental class (typically 0 or 1 for binary models)
         """
-        environmental_scores = []
-
-        # Process sentences in batches for efficiency
-        for i in tqdm(range(0, len(sentences), self.batch_size), desc="Scoring", leave=False):
-            batch = sentences[i:i + self.batch_size]
-
-            # Run ESGBERT inference on the batch
-            outputs = self.classifier(batch)
-
-            # Process each sentence's results
-            for output in outputs:
-                # Find the environmental score from the pipeline output
-                environmental_score = 0.0
-                for result in output:
-                    # Look for environmental-related labels (model might use different names)
-                    label = result["label"].lower()
-                    if ("environment" in label or "environmental" in label or
-                        "label_1" in label or "env" in label or "esg" in label):
-                        environmental_score = result["score"]
-                        break
-
-                environmental_scores.append(environmental_score)
-
-        return environmental_scores
-
-    def analyze_report(self, sentences_data: List[Dict], report_name: str, output_dir: str) -> Dict[str, Any]:
-        """
-        Analyze sentences from a report and save results to CSV files.
-
-        Args:
-            sentences_data: List of dictionaries with 'page' and 'sentence' keys
-            report_name: Clean report identifier for output filenames
-            output_dir: Directory where CSV files will be saved
-
-        Returns:
-            Dictionary containing summary statistics and file paths
-        """
-        # Handle edge case where no sentences were extracted
-        if not sentences_data:
-            return {
-                "report": report_name,
-                "total_sentences": 0,
-                "environmental_candidates": 0,
-                "all_csv": None,
-                "hits_csv": None
-            }
-
-        # Convert sentence data to pandas DataFrame
-        df = pd.DataFrame(sentences_data)
-
-        # Run ESGBERT inference on all sentences
-        scores = self.score_sentences(df["sentence"].tolist())
-
-        # Add scores and threshold-based classification to DataFrame
-        df["environment_score"] = scores
-        df["is_environmental"] = df["environment_score"] >= self.threshold
-
-        # Ensure output directory exists
-        os.makedirs(output_dir, exist_ok=True)
-
-        # Save complete results: all sentences with their scores
-        all_csv = os.path.join(output_dir, f"environmental_results_all_{report_name}.csv")
-        df[["page", "environment_score", "sentence"]].to_csv(all_csv, index=False)
-
-        # Save filtered results: only high-confidence matches, sorted by score
-        hits = (df[df["is_environmental"]]
-                .sort_values("environment_score", ascending=False))
-
-        hits_csv = os.path.join(output_dir, f"environmental_results_hits_{report_name}.csv")
-        hits[["page", "environment_score", "sentence"]].to_csv(hits_csv, index=False)
-
-        # Return summary statistics
-        return {
-            "report": report_name,
-            "total_sentences": int(len(df)),
-            "environmental_candidates": int(df["is_environmental"].sum()),
-            "all_csv": all_csv,
-            "hits_csv": hits_csv
-        }
+        # Get the model's label configuration
+        id2label = getattr(self.model.config, "id2label", {})
+        
+        # Search for various ways "environmental" might be labeled in the model
+        env_synonyms = ["environment", "environmental", "env", "label_1", "esg_environmental"]
+        
+        for idx, label in id2label.items():
+            label_lower = str(label).lower()
+            if any(synonym in label_lower for synonym in env_synonyms):
+                return int(idx)
+        
+        # Fallback: assume binary classification where class 1 = environmental
+        return 1
+    
+    def _get_output_column_name(self) -> str:
+        """Get the name for the score column in output CSV files."""
+        return "environment_score"
+    
+    def _get_output_prefix(self) -> str:
+        """Get the prefix for output file names and internal columns."""
+        return "environment"
