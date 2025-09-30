@@ -161,22 +161,22 @@ class BaseAnalyzer(ABC):
         print(f"\n📋 Preview: Top {min(preview_count, len(hits_df))} {self._get_output_prefix()} results for {report_name}")
         print("=" * 80)
 
-        # Show top results up to preview_count
-        preview_df = hits_df.head(preview_count)
+        # # Show top results up to preview_count
+        # preview_df = hits_df.head(preview_count)
 
-        for idx, (_, row) in enumerate(preview_df.iterrows(), 1):
-            score = row[score_column]
-            page = row['page']
-            sentence = row['sentence']
+        # for idx, (_, row) in enumerate(preview_df.iterrows(), 1):
+        #     score = row[score_column]
+        #     page = row['page']
+        #     sentence = row['sentence']
 
-            # Truncate very long sentences for display
-            display_sentence = sentence[:120] + "..." if len(sentence) > 120 else sentence
+        #     # Truncate very long sentences for display
+        #     display_sentence = sentence[:120] + "..." if len(sentence) > 120 else sentence
 
-            print(f"{idx:2d}. [Page {page:2d}] Score: {score:.3f} | {display_sentence}")
+        #     print(f"{idx:2d}. [Page {page:2d}] Score: {score:.3f} | {display_sentence}")
 
-            # Add a separator every 10 items for readability
-            if idx % 10 == 0 and idx < len(preview_df):
-                print("-" * 80)
+        #     # Add a separator every 10 items for readability
+        #     if idx % 10 == 0 and idx < len(preview_df):
+        #         print("-" * 80)
 
         # Show summary if there are more results
         total_hits = len(hits_df)

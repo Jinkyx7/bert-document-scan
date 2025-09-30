@@ -243,8 +243,8 @@ class FinancialAnalyzer:
                        .sort_values(["positive", "score"], ascending=False)
                        .head(self.top_n))  # Limit to top N results
 
-        # Preview results before saving to CSV
-        self._preview_results(top_positive, report_name)
+        # # Preview results before saving to CSV
+        # self._preview_results(top_positive, report_name)
 
         # Save complete results: all sentences with comprehensive sentiment data
         # Using consistent naming convention: financial_results_all_{report}.csv
