@@ -49,17 +49,25 @@ class MaoriAnalyzer:
 
         # Define zero-shot labels for Māori wellbeing classification
         self.zshot_labels = [
-            "This sentence describes Māori wellbeing or kaupapa Māori services.",
-            "This sentence discusses Māori culture or Māori implementation in services.",
+            "This sentence describes Māori wellbeing or kaupapa Māori services.", 
+            "This sentence discusses Māori culture or Māori implementation in services.", 
             "This sentence is about Whānau Ora, Rongoā Māori, or Te Whare Tapa Whā.",
-        ]
+            ]
 
         # Initialize Māori health lexicon
         self._init_lexicon()
 
         # Load zero-shot classification model
         print("Loading facebook/bart-large-mnli zero-shot model...")
-        device = 0 if torch.cuda.is_available() else -1
+        # Priority: CUDA (NVIDIA) > MPS (Apple Silicon M1/M2/M3/M4) > CPU
+        if torch.cuda.is_available():
+            device = 0  # pipeline uses device=0 for CUDA
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = -1  # pipeline uses device=-1 for CPU
+
+        print(f"Using device: {device}")
         self.classifier = pipeline(
             "zero-shot-classification",
             model="facebook/bart-large-mnli",
@@ -206,7 +214,7 @@ class MaoriAnalyzer:
 
     def score_sentences(self, sentences: List[str]) -> List[Dict[str, Any]]:
         """
-        Score sentences using hybrid keyword + zero-shot approach.
+        Score sentences using hybrid keyword + zero-shot approach with true batch processing.
 
         Args:
             sentences: List of sentences to analyze
@@ -220,29 +228,74 @@ class MaoriAnalyzer:
         """
         results = []
 
-        # Process sentences in batches for zero-shot model
-        for i in tqdm(range(0, len(sentences), self.batch_size), desc="Scoring", leave=False):
-            batch = sentences[i:i + self.batch_size]
+        # Step 1: Keyword matching for all sentences (fast, no batching needed)
+        keyword_data = []
+        for sentence in sentences:
+            hits = self._keyword_hits(sentence)
+            kw_count = len(hits)
+            keyword_data.append({
+                'hits': hits,
+                'count': kw_count,
+                'sentence': sentence
+            })
 
-            for sentence in batch:
-                # Step 1: Keyword matching
-                hits = self._keyword_hits(sentence)
-                kw_count = len(hits)
+        # Step 2: Identify sentences that need zero-shot scoring
+        sentences_to_score = []
+        sentence_indices = []
+        for idx, kw_info in enumerate(keyword_data):
+            if kw_info['count'] >= self.keyword_min_hits:
+                sentences_to_score.append(kw_info['sentence'])
+                sentence_indices.append(idx)
 
-                # Step 2: Zero-shot classification (only if keywords present or no min required)
-                if kw_count >= self.keyword_min_hits:
-                    zshot_score = self._zero_shot_score(sentence)
-                    hybrid_score = self._hybrid_score(kw_count, zshot_score)
-                else:
-                    zshot_score = 0.0
-                    hybrid_score = 0.0
+        # Step 3: True batch zero-shot classification
+        zshot_scores = {}
+        if sentences_to_score:
+            print(f"Running zero-shot classification on {len(sentences_to_score)} sentences...")
+            for i in tqdm(range(0, len(sentences_to_score), self.batch_size), desc="Scoring", leave=False):
+                batch = sentences_to_score[i:i + self.batch_size]
 
-                results.append({
-                    'keyword_hits': hits,
-                    'kw_count': kw_count,
-                    'zshot_score': zshot_score,
-                    'hybrid_score': hybrid_score
-                })
+                try:
+                    # Process entire batch at once (true batch processing)
+                    batch_results = self.classifier(
+                        batch,
+                        candidate_labels=self.zshot_labels,
+                        multi_label=True
+                    )
+
+                    # Handle both single result and list of results
+                    if not isinstance(batch_results, list):
+                        batch_results = [batch_results]
+
+                    # Extract scores for each sentence in batch
+                    for j, result in enumerate(batch_results):
+                        sentence = batch[j]
+                        score = float(max(result["scores"])) if "scores" in result else 0.0
+                        zshot_scores[sentence] = score
+
+                except Exception as e:
+                    print(f"Warning: Batch scoring failed, falling back to individual: {str(e)[:100]}")
+                    # Fallback to individual scoring for this batch
+                    for sentence in batch:
+                        zshot_scores[sentence] = self._zero_shot_score(sentence)
+
+        # Step 4: Combine keyword and zero-shot results
+        for kw_info in keyword_data:
+            sentence = kw_info['sentence']
+            kw_count = kw_info['count']
+
+            if sentence in zshot_scores:
+                zshot_score = zshot_scores[sentence]
+                hybrid_score = self._hybrid_score(kw_count, zshot_score)
+            else:
+                zshot_score = 0.0
+                hybrid_score = 0.0
+
+            results.append({
+                'keyword_hits': kw_info['hits'],
+                'kw_count': kw_count,
+                'zshot_score': zshot_score,
+                'hybrid_score': hybrid_score
+            })
 
         return results
 

@@ -57,7 +57,15 @@ class MaoriXLMBaseAnalyzer:
 
         # Load zero-shot classification model (XLM-RoBERTa base)
         print("Loading xlm-roberta-base zero-shot model...")
-        device = 0 if torch.cuda.is_available() else -1
+        # Priority: CUDA (NVIDIA) > MPS (Apple Silicon M1/M2/M3/M4) > CPU
+        if torch.cuda.is_available():
+            device = 0  # pipeline uses device=0 for CUDA
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = -1  # pipeline uses device=-1 for CPU
+
+        print(f"Using device: {device}")
 
         # Note: xlm-roberta-base is not specifically fine-tuned for NLI/zero-shot
         # For better results, consider using a fine-tuned version like joeddav/xlm-roberta-base-xnli

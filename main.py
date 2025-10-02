@@ -33,7 +33,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 from src.utils import get_pdf_files, extract_sentences_with_pages, safe_report_name, extract_company_code
 from src.models import (SocialAnalyzer, EnvironmentalAnalyzer, FinancialAnalyzer,
                         MaoriAnalyzer, MaoriXLMAnalyzer, MaoriMDeBERTaAnalyzer,
-                        MaoriDeBERTaAnalyzer, MaoriXLMBaseAnalyzer)
+                        MaoriDeBERTaAnalyzer, MaoriXLMBaseAnalyzer, MaoriDistilBARTAnalyzer)
 
 
 def process_reports_with_model(pdf_files, analyzer, model_name, output_dir):
@@ -155,7 +155,7 @@ Examples:
     parser.add_argument(
         "--model",
         choices=["social", "environmental", "financial", "maori", "maori_xlm", "maori_mdeberta",
-                 "maori_deberta", "maori_xlmbase", "all"],
+                 "maori_deberta", "maori_xlmbase", "maori_distilbart", "all"],
         default="all",
         help="Which BERT model(s) to run (default: all)"
     )
@@ -208,6 +208,12 @@ Examples:
         type=float,
         default=0.7,
         help="Threshold for Māori wellbeing XLM-RoBERTa base classification (0.0-1.0, default: 0.7)"
+    )
+    parser.add_argument(
+        "--maori-distilbart-threshold",
+        type=float,
+        default=0.7,
+        help="Threshold for Māori wellbeing DistilBART classification (0.0-1.0, default: 0.7)"
     )
     
     # Parse command-line arguments
@@ -301,6 +307,14 @@ Examples:
         output_subdir = os.path.join(args.output_dir, "maori_xlmbase")
         summaries = process_reports_with_model(pdf_files, analyzer, "Māori Wellbeing (XLM-RoBERTa base)", output_subdir)
         all_summaries["maori_xlmbase"] = summaries
+
+    # Māori wellbeing analysis (DistilBART)
+    if args.model in ["maori_distilbart", "all"]:
+        print(f"\nInitializing Māori Wellbeing Analyzer (DistilBART) (threshold: {args.maori_distilbart_threshold})...")
+        analyzer = MaoriDistilBARTAnalyzer(threshold=args.maori_distilbart_threshold)
+        output_subdir = os.path.join(args.output_dir, "maori_distilbart")
+        summaries = process_reports_with_model(pdf_files, analyzer, "Māori Wellbeing (DistilBART)", output_subdir)
+        all_summaries["maori_distilbart"] = summaries
 
     # Display completion message
     print(f"\n{'='*60}")

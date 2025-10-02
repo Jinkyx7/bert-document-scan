@@ -9,6 +9,7 @@ and focuses on sentiment rather than topic classification.
 
 import os
 import pandas as pd
+import torch
 from typing import List, Dict, Any
 from tqdm import tqdm
 from transformers import pipeline
@@ -44,16 +45,27 @@ class FinancialAnalyzer:
         self.threshold = threshold
         self.batch_size = batch_size
         self.top_n = top_n
-        
+
+        # Automatically detect and use GPU if available for faster inference
+        # Priority: CUDA (NVIDIA) > MPS (Apple Silicon M1/M2/M3/M4) > CPU
+        if torch.cuda.is_available():
+            device = 0  # pipeline uses device=0 for CUDA
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = -1  # pipeline uses device=-1 for CPU
+
         # Initialize FinBERT pipeline for sentiment classification
         # Uses transformers.pipeline for simplified inference
         print("Loading FinBERT model for financial sentiment analysis...")
+        print(f"Using device: {device}")
         self.classifier = pipeline(
             task="text-classification",
             model="ProsusAI/finbert",
             tokenizer="ProsusAI/finbert",
             return_all_scores=True,  # Return scores for all three classes
-            truncation=True          # Handle long sentences automatically
+            truncation=True,         # Handle long sentences automatically
+            device=device            # Use GPU if available
         )
     
     def _softmax_scores(self, label_scores: List[Dict]) -> Dict[str, float]:

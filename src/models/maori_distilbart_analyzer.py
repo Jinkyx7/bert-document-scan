@@ -1,8 +1,8 @@
 """
-Māori wellbeing analyzer using joeddav/xlm-roberta-large-xnli zero-shot classification.
+Māori wellbeing analyzer using valhalla/distilbart-mnli-12-1 zero-shot classification.
 
-This module identifies sentences related to Māori wellbeing using XLM-RoBERTa, a multilingual
-model that better handles te reo Māori and cross-lingual understanding compared to BART.
+This module identifies sentences related to Māori wellbeing using DistilBART, a distilled
+version of BART that is 50% smaller and 60% faster with minimal accuracy loss.
 """
 
 import os
@@ -14,28 +14,30 @@ import torch
 from transformers import pipeline
 
 
-class MaoriXLMAnalyzer:
+class MaoriDistilBARTAnalyzer:
     """
-    Analyzer for identifying Māori wellbeing content using XLM-RoBERTa multilingual model.
+    Analyzer for identifying Māori wellbeing content using DistilBART.
 
     Uses a hybrid approach:
     1. Keyword matching with Māori health lexicon (frameworks, practices, terminology)
-    2. Zero-shot classification using joeddav/xlm-roberta-large-xnli (multilingual)
+    2. Zero-shot classification using valhalla/distilbart-mnli-12-1
     3. Combined scoring to improve accuracy
 
-    Key advantages of XLM-RoBERTa:
-    - Better multilingual support including te reo Māori
-    - Improved cross-lingual understanding
-    - More robust to text with mixed English/Māori content
+    Key advantages of DistilBART:
+    - 50% smaller model size than BART-large
+    - 60% faster inference speed
+    - Maintains ~97% of BART's accuracy
+    - Better for CPU inference
     """
 
-    def __init__(self, threshold: float = 0.7, batch_size: int = 8):
+    def __init__(self, threshold: float = 0.7, batch_size: int = 16):
         """
-        Initialize the Māori wellbeing analyzer with XLM-RoBERTa.
+        Initialize the Māori wellbeing analyzer with DistilBART.
 
         Args:
             threshold: Hybrid score threshold for filtering hits (0.0-1.0)
             batch_size: Number of sentences to process simultaneously
+                       (DistilBART is faster, can use larger batches)
         """
         self.threshold = threshold
         self.batch_size = batch_size
@@ -46,16 +48,15 @@ class MaoriXLMAnalyzer:
 
         # Define zero-shot labels for Māori wellbeing classification
         self.zshot_labels = [
-            "This sentence describes Māori wellbeing or kaupapa Māori services.",
-            "This sentence discusses Māori culture or Māori implementation in services.",
-            "This sentence is about Whānau Ora, Rongoā Māori, or Te Whare Tapa Whā.",
+            "Direct Māori wellbeing services using kaupapa Māori frameworks (e.g., Whānau Ora, Rongoā Māori, Te Whare Tapa Whā).",
+            "General Māori culture or organisational implementation (e.g., Te Reo, Tikanga, partnerships, policies).",
         ]
 
         # Initialize Māori health lexicon
         self._init_lexicon()
 
-        # Load zero-shot classification model (multilingual XLM-RoBERTa)
-        print("Loading joeddav/xlm-roberta-large-xnli zero-shot model...")
+        # Load zero-shot classification model (DistilBART)
+        print("Loading valhalla/distilbart-mnli-12-1 zero-shot model...")
         # Priority: CUDA (NVIDIA) > MPS (Apple Silicon M1/M2/M3/M4) > CPU
         if torch.cuda.is_available():
             device = 0  # pipeline uses device=0 for CUDA
@@ -65,15 +66,10 @@ class MaoriXLMAnalyzer:
             device = -1  # pipeline uses device=-1 for CPU
 
         print(f"Using device: {device}")
-
-        # Set environment variable to skip fast tokenizer conversion issues
-        os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
-
         self.classifier = pipeline(
             "zero-shot-classification",
-            model="joeddav/xlm-roberta-large-xnli",
-            device=device,
-            trust_remote_code=True
+            model="valhalla/distilbart-mnli-12-1",
+            device=device
         )
 
         # Disable tokenizer parallelism to avoid warnings
@@ -136,7 +132,7 @@ class MaoriXLMAnalyzer:
         return hits
 
     def _zero_shot_score(self, sentence: str) -> float:
-        """Calculate zero-shot classification score using XLM-RoBERTa."""
+        """Calculate zero-shot classification score using DistilBART."""
         try:
             result = self.classifier(
                 sentence,
@@ -186,14 +182,14 @@ class MaoriXLMAnalyzer:
             return {
                 "report": report_name,
                 "total_sentences": 0,
-                "maori_xlm_candidates": 0,
+                "maori_distilbart_candidates": 0,
                 "all_csv": None,
                 "hits_csv": None
             }
 
         df = pd.DataFrame(sentences_data)
 
-        print(f"Analyzing {len(df)} sentences for Māori wellbeing content (XLM-RoBERTa)...")
+        print(f"Analyzing {len(df)} sentences for Māori wellbeing content (DistilBART)...")
         score_results = self.score_sentences(df["sentence"].tolist())
 
         df["keyword_hits"] = ["; ".join(r['keyword_hits']) for r in score_results]
@@ -204,7 +200,7 @@ class MaoriXLMAnalyzer:
         os.makedirs(output_dir, exist_ok=True)
 
         # Save all results
-        all_csv = os.path.join(output_dir, f"maori_xlm_results_all_{report_name}.csv")
+        all_csv = os.path.join(output_dir, f"maori_distilbart_results_all_{report_name}.csv")
         df[["page", "zshot_score", "hybrid_score", "kw_count", "keyword_hits", "sentence"]].to_csv(
             all_csv, index=False, encoding="utf-8"
         )
@@ -215,7 +211,7 @@ class MaoriXLMAnalyzer:
             (df["zshot_score"] >= self.zshot_min_score)
         ].sort_values("hybrid_score", ascending=False)
 
-        hits_csv = os.path.join(output_dir, f"maori_xlm_results_hits_{report_name}.csv")
+        hits_csv = os.path.join(output_dir, f"maori_distilbart_results_hits_{report_name}.csv")
         hits[["page", "zshot_score", "hybrid_score", "kw_count", "keyword_hits", "sentence"]].to_csv(
             hits_csv, index=False, encoding="utf-8"
         )
@@ -223,7 +219,7 @@ class MaoriXLMAnalyzer:
         return {
             "report": report_name,
             "total_sentences": int(len(df)),
-            "maori_xlm_candidates": int(len(hits)),
+            "maori_distilbart_candidates": int(len(hits)),
             "all_csv": all_csv,
             "hits_csv": hits_csv,
             "avg_zshot_score": round(hits["zshot_score"].mean(), 4) if len(hits) > 0 else 0.0,

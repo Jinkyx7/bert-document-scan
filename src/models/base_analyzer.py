@@ -42,10 +42,17 @@ class BaseAnalyzer(ABC):
         self.batch_size = batch_size
         
         # Automatically detect and use GPU if available for faster inference
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        
+        # Priority: CUDA (NVIDIA) > MPS (Apple Silicon M1/M2/M3/M4) > CPU
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
+
         # Load pre-trained tokenizer and model from HuggingFace
         print(f"Loading model: {model_name}")
+        print(f"Using device: {self.device}")
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
         
@@ -141,6 +148,8 @@ class BaseAnalyzer(ABC):
             del encoded, logits, probs
             if self.device == "cuda":
                 torch.cuda.empty_cache()
+            elif self.device == "mps":
+                torch.mps.empty_cache()
         
         return probabilities
 

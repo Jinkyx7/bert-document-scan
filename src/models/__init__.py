@@ -10,6 +10,7 @@ from .maori_xlm_analyzer import MaoriXLMAnalyzer
 from .maori_mdeberta_analyzer import MaoriMDeBERTaAnalyzer
 from .maori_deberta_analyzer import MaoriDeBERTaAnalyzer
 from .maori_xlmbase_analyzer import MaoriXLMBaseAnalyzer
+from .maori_distilbart_analyzer import MaoriDistilBARTAnalyzer
 
 __all__ = [
     "SocialAnalyzer",
@@ -19,5 +20,6 @@ __all__ = [
     "MaoriXLMAnalyzer",
     "MaoriMDeBERTaAnalyzer",
     "MaoriDeBERTaAnalyzer",
-    "MaoriXLMBaseAnalyzer"
+    "MaoriXLMBaseAnalyzer",
+    "MaoriDistilBARTAnalyzer"
 ]
