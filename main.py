@@ -31,7 +31,9 @@ import pandas as pd
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 from src.utils import get_pdf_files, extract_sentences_with_pages, safe_report_name, extract_company_code
-from src.models import SocialAnalyzer, EnvironmentalAnalyzer, FinancialAnalyzer, MaoriAnalyzer, MaoriXLMAnalyzer, MaoriMDeBERTaAnalyzer
+from src.models import (SocialAnalyzer, EnvironmentalAnalyzer, FinancialAnalyzer,
+                        MaoriAnalyzer, MaoriXLMAnalyzer, MaoriMDeBERTaAnalyzer,
+                        MaoriDeBERTaAnalyzer, MaoriXLMBaseAnalyzer)
 
 
 def process_reports_with_model(pdf_files, analyzer, model_name, output_dir):
@@ -152,7 +154,8 @@ Examples:
     # Model selection
     parser.add_argument(
         "--model",
-        choices=["social", "environmental", "financial", "maori", "maori_xlm", "maori_mdeberta", "all"],
+        choices=["social", "environmental", "financial", "maori", "maori_xlm", "maori_mdeberta",
+                 "maori_deberta", "maori_xlmbase", "all"],
         default="all",
         help="Which BERT model(s) to run (default: all)"
     )
@@ -193,6 +196,18 @@ Examples:
         type=float,
         default=0.7,
         help="Threshold for Māori wellbeing mDeBERTa classification (0.0-1.0, default: 0.7)"
+    )
+    parser.add_argument(
+        "--maori-deberta-threshold",
+        type=float,
+        default=0.7,
+        help="Threshold for Māori wellbeing DeBERTa v3 classification (0.0-1.0, default: 0.7)"
+    )
+    parser.add_argument(
+        "--maori-xlmbase-threshold",
+        type=float,
+        default=0.7,
+        help="Threshold for Māori wellbeing XLM-RoBERTa base classification (0.0-1.0, default: 0.7)"
     )
     
     # Parse command-line arguments
@@ -270,6 +285,22 @@ Examples:
         output_subdir = os.path.join(args.output_dir, "maori_mdeberta")
         summaries = process_reports_with_model(pdf_files, analyzer, "Māori Wellbeing (mDeBERTa)", output_subdir)
         all_summaries["maori_mdeberta"] = summaries
+
+    # Māori wellbeing analysis (DeBERTa v3)
+    if args.model in ["maori_deberta", "all"]:
+        print(f"\nInitializing Māori Wellbeing Analyzer (DeBERTa v3) (threshold: {args.maori_deberta_threshold})...")
+        analyzer = MaoriDeBERTaAnalyzer(threshold=args.maori_deberta_threshold)
+        output_subdir = os.path.join(args.output_dir, "maori_deberta")
+        summaries = process_reports_with_model(pdf_files, analyzer, "Māori Wellbeing (DeBERTa v3)", output_subdir)
+        all_summaries["maori_deberta"] = summaries
+
+    # Māori wellbeing analysis (XLM-RoBERTa base)
+    if args.model in ["maori_xlmbase", "all"]:
+        print(f"\nInitializing Māori Wellbeing Analyzer (XLM-RoBERTa base) (threshold: {args.maori_xlmbase_threshold})...")
+        analyzer = MaoriXLMBaseAnalyzer(threshold=args.maori_xlmbase_threshold)
+        output_subdir = os.path.join(args.output_dir, "maori_xlmbase")
+        summaries = process_reports_with_model(pdf_files, analyzer, "Māori Wellbeing (XLM-RoBERTa base)", output_subdir)
+        all_summaries["maori_xlmbase"] = summaries
 
     # Display completion message
     print(f"\n{'='*60}")

@@ -8,6 +8,8 @@ from .financial_analyzer import FinancialAnalyzer
 from .maori_analyzer import MaoriAnalyzer
 from .maori_xlm_analyzer import MaoriXLMAnalyzer
 from .maori_mdeberta_analyzer import MaoriMDeBERTaAnalyzer
+from .maori_deberta_analyzer import MaoriDeBERTaAnalyzer
+from .maori_xlmbase_analyzer import MaoriXLMBaseAnalyzer
 
 __all__ = [
     "SocialAnalyzer",
@@ -15,5 +17,7 @@ __all__ = [
     "FinancialAnalyzer",
     "MaoriAnalyzer",
     "MaoriXLMAnalyzer",
-    "MaoriMDeBERTaAnalyzer"
+    "MaoriMDeBERTaAnalyzer",
+    "MaoriDeBERTaAnalyzer",
+    "MaoriXLMBaseAnalyzer"
 ]
