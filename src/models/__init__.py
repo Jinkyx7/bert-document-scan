@@ -5,9 +5,15 @@ BERT-based analyzers for ESG and financial sentiment analysis.
 from .social_analyzer import SocialAnalyzer
 from .environmental_analyzer import EnvironmentalAnalyzer
 from .financial_analyzer import FinancialAnalyzer
+from .maori_analyzer import MaoriAnalyzer
+from .maori_xlm_analyzer import MaoriXLMAnalyzer
+from .maori_mdeberta_analyzer import MaoriMDeBERTaAnalyzer
 
 __all__ = [
     "SocialAnalyzer",
-    "EnvironmentalAnalyzer", 
-    "FinancialAnalyzer"
+    "EnvironmentalAnalyzer",
+    "FinancialAnalyzer",
+    "MaoriAnalyzer",
+    "MaoriXLMAnalyzer",
+    "MaoriMDeBERTaAnalyzer"
 ]
